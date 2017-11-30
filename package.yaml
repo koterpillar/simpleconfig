@@ -1,0 +1,29 @@
+name: simpleconfig
+version: '0.1.0.0'
+synopsis: Short description of your package
+description: Please see the README on Github at <https://github.com/koterpillar/simpleconfig#readme>
+category: Web
+author: Alexey Kotlyarov
+maintainer: a@koterpillar.com
+copyright: 2017 Alexey Kotlyarov
+license: BSD3
+github: koterpillar/simpleconfig
+extra-source-files:
+- README.md
+library:
+  source-dirs: src
+  dependencies:
+  - base >=4.7 && <5
+  - containers
+tests:
+  simpleconfig-test:
+    main: Spec.hs
+    source-dirs: test
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - base
+    - simpleconfig
+    - text
