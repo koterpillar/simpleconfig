@@ -15,6 +15,7 @@ library:
   dependencies:
   - base >=4.7 && <5
   - containers
+  - lens
 tests:
   simpleconfig-test:
     main: Spec.hs
@@ -26,4 +27,6 @@ tests:
     dependencies:
     - base
     - simpleconfig
+    - generic-deriving
+    - lens
     - text
