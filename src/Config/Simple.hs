@@ -15,8 +15,8 @@ module Config.Simple
   , Partial
   , Complete
   , LensFor(..)
-  , configLensPartial
   , configLens
+  , configLensPartial
   , fromPartialConfig
   ) where
 
@@ -64,10 +64,6 @@ type Complete config = config CComplete
 
 type LensConfig k config = config (CLensFor k (config k))
 
-type PartialLens config = LensConfig CPartial config
-
-type CompleteLens config = LensConfig CComplete config
-
 fromPartialConfig ::
      ( Generic (Partial config)
      , Generic (Complete config)
@@ -81,15 +77,7 @@ class GFromPartialConfig (repPartial :: * -> *) (repComplete :: * -> *) where
   gFromPartialConfig :: repPartial x -> Maybe (repComplete x)
 
 instance GFromPartialConfig fp fc =>
-         GFromPartialConfig (D1 m fp) (D1 m fc) where
-  gFromPartialConfig (M1 x) = M1 <$> gFromPartialConfig x
-
-instance GFromPartialConfig fp fc =>
-         GFromPartialConfig (C1 m fp) (C1 m fc) where
-  gFromPartialConfig (M1 x) = M1 <$> gFromPartialConfig x
-
-instance GFromPartialConfig fp fc =>
-         GFromPartialConfig (S1 m fp) (S1 m fc) where
+         GFromPartialConfig (M1 i m fp) (M1 i m fc) where
   gFromPartialConfig (M1 x) = M1 <$> gFromPartialConfig x
 
 instance (GFromPartialConfig ap ac, GFromPartialConfig bp bc) =>
@@ -97,14 +85,21 @@ instance (GFromPartialConfig ap ac, GFromPartialConfig bp bc) =>
   gFromPartialConfig (a :*: b) =
     liftA2 (:*:) (gFromPartialConfig a) (gFromPartialConfig b)
 
-instance GFromPartialConfig (Rec0 Any) (Rec0 Bool) where
-  gFromPartialConfig (K1 a) = Just $ K1 $ getAny a
+class GFromPartialConfigMember partial complete where
+  gFromPartialConfigMember :: partial -> Maybe complete
 
-instance GFromPartialConfig (Rec0 (Set a)) (Rec0 (Set a)) where
-  gFromPartialConfig (K1 a) = Just $ K1 a
+instance GFromPartialConfigMember partial complete =>
+         GFromPartialConfig (Rec0 partial) (Rec0 complete) where
+  gFromPartialConfig (K1 a) = K1 <$> gFromPartialConfigMember a
 
-instance GFromPartialConfig (Rec0 (Last a)) (Rec0 a) where
-  gFromPartialConfig (K1 a) = K1 <$> getLast a
+instance GFromPartialConfigMember Any Bool where
+  gFromPartialConfigMember = Just . getAny
+
+instance GFromPartialConfigMember (Set a) (Set a) where
+  gFromPartialConfigMember = Just
+
+instance GFromPartialConfigMember (Last a) a where
+  gFromPartialConfigMember = getLast
 
 configLens' ::
      forall config k proxy.
@@ -142,10 +137,7 @@ configLens = configLens' (Nothing :: Maybe CComplete)
 class GLensFor k root rep repLens where
   gToLensFor :: proxy k -> Lens' root (rep x) -> repLens x
 
-instance GLensFor k root r rl => GLensFor k root (D1 m r) (D1 m rl) where
-  gToLensFor pk rootLens = M1 $ gToLensFor pk (rootLens . G._M1)
-
-instance GLensFor k root r rl => GLensFor k root (C1 m r) (C1 m rl) where
+instance GLensFor k root r rl => GLensFor k root (M1 i m r) (M1 i m rl) where
   gToLensFor pk rootLens = M1 $ gToLensFor pk (rootLens . G._M1)
 
 instance (GLensFor k root ra ral, GLensFor k root rb rbl) =>
@@ -153,24 +145,21 @@ instance (GLensFor k root ra ral, GLensFor k root rb rbl) =>
   gToLensFor pk rootLens =
     gToLensFor pk (rootLens . _1) :*: gToLensFor pk (rootLens . _2)
 
-instance GLensFor k root r rl => GLensFor k root (S1 m r) (S1 m rl) where
-  gToLensFor pk rootLens = M1 $ gToLensFor pk (rootLens . G._M1)
-
-instance GLensLeaf k x y =>
+instance GLensForMember k x y =>
          GLensFor k root (Rec0 x) (Rec0 (LensFor root y)) where
   gToLensFor pk rootLens = K1 $ LensFor $ rootLens . G._K1 . gLensLeaf pk
 
-class GLensLeaf k x y where
+class GLensForMember k x y where
   gLensLeaf :: proxy k -> Lens' x y
 
-instance GLensLeaf CPartial (Last a) (Maybe a) where
+instance GLensForMember CPartial (Last a) (Maybe a) where
   gLensLeaf _ = iso getLast Last
 
-instance GLensLeaf CPartial Any Bool where
+instance GLensForMember CPartial Any Bool where
   gLensLeaf _ = iso getAny Any
 
-instance GLensLeaf CPartial (Set a) (Set a) where
+instance GLensForMember CPartial (Set a) (Set a) where
   gLensLeaf _ = id
 
-instance GLensLeaf CComplete a a where
+instance GLensForMember CComplete a a where
   gLensLeaf _ = id
