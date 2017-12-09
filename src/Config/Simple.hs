@@ -10,7 +10,7 @@
 
 module Config.Simple
   ( ConfigBool
-  , ConfigItem
+  , ConfigLast
   , ConfigSet
   , Partial
   , Complete
@@ -40,11 +40,11 @@ data CLensFor k c
 newtype LensFor s a =
   LensFor (Lens' s a)
 
-type family ConfigItem a k where
-  ConfigItem a CPartial = Last a
-  ConfigItem a CComplete = a
-  ConfigItem a (CLensFor CPartial root) = LensFor root (Maybe a)
-  ConfigItem a (CLensFor CComplete root) = LensFor root a
+type family ConfigLast a k where
+  ConfigLast a CPartial = Last a
+  ConfigLast a CComplete = a
+  ConfigLast a (CLensFor CPartial root) = LensFor root (Maybe a)
+  ConfigLast a (CLensFor CComplete root) = LensFor root a
 
 type family ConfigBool k where
   ConfigBool CPartial = Any

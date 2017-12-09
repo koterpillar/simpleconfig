@@ -25,7 +25,7 @@ import GHC.Generics
 import Config.Simple
 
 data ConfigF k = Config
-  { _address :: ConfigItem Text k
+  { _address :: ConfigLast Text k
   , _dryRun :: ConfigBool k
   , _widgets :: ConfigSet Text k
   } deriving (Generic)
