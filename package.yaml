@@ -27,6 +27,7 @@ tests:
     dependencies:
     - base
     - simpleconfig
+    - containers
     - generic-deriving
     - lens
     - text

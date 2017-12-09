@@ -15,6 +15,7 @@ module Config.Simple
   , Partial
   , Complete
   , LensFor(..)
+  , configLensPartial
   , configLens
   , fromPartialConfig
   ) where
@@ -34,7 +35,7 @@ data CPartial
 
 data CComplete
 
-data CLensFor c
+data CLensFor k c
 
 newtype LensFor s a =
   LensFor (Lens' s a)
@@ -42,23 +43,30 @@ newtype LensFor s a =
 type family ConfigItem a k where
   ConfigItem a CPartial = Last a
   ConfigItem a CComplete = a
-  ConfigItem a (CLensFor root) = LensFor root (Maybe a)
+  ConfigItem a (CLensFor CPartial root) = LensFor root (Maybe a)
+  ConfigItem a (CLensFor CComplete root) = LensFor root a
 
 type family ConfigBool k where
   ConfigBool CPartial = Any
   ConfigBool CComplete = Bool
-  ConfigBool (CLensFor root) = LensFor root Bool
+  ConfigBool (CLensFor CPartial root) = LensFor root Bool
+  ConfigBool (CLensFor CComplete root) = LensFor root Bool
 
 type family ConfigSet a k where
   ConfigSet a CPartial = Set a
   ConfigSet a CComplete = Set a
-  ConfigSet a (CLensFor root) = LensFor root (Set a)
+  ConfigSet a (CLensFor CPartial root) = LensFor root (Set a)
+  ConfigSet a (CLensFor CComplete root) = LensFor root (Set a)
 
 type Partial config = config CPartial
 
 type Complete config = config CComplete
 
-type PartialLens config = config (CLensFor (Partial config))
+type LensConfig k config = config (CLensFor k (config k))
+
+type PartialLens config = LensConfig CPartial config
+
+type CompleteLens config = LensConfig CComplete config
 
 fromPartialConfig ::
      ( Generic (Partial config)
@@ -98,40 +106,71 @@ instance GFromPartialConfig (Rec0 (Set a)) (Rec0 (Set a)) where
 instance GFromPartialConfig (Rec0 (Last a)) (Rec0 a) where
   gFromPartialConfig (K1 a) = K1 <$> getLast a
 
-configLens ::
-     forall config.
-     ( Generic (Partial config)
-     , Generic (PartialLens config)
-     , GLensFor (Partial config) (Rep (Partial config)) (Rep (PartialLens config))
+configLens' ::
+     forall config k proxy.
+     ( Generic (config k)
+     , Generic (LensConfig k config)
+     , GLensFor k (config k) (Rep (config k)) (Rep (LensConfig k config))
      )
-  => PartialLens config
-configLens = G.to $ gToLensFor rootLens
+  => proxy k
+  -> LensConfig k config
+configLens' pk = G.to $ gToLensFor pk rootLens
   where
     rootLens ::
-         forall x. Generic (Partial config)
-      => Lens' (Partial config) (Rep (Partial config) x)
+         forall x. Generic (config k)
+      => Lens' (config k) (Rep (config k) x)
     rootLens = G.generic
 
-class GLensFor root rep repLens where
-  gToLensFor :: Lens' root (rep x) -> repLens x
+configLensPartial ::
+     forall config proxy.
+     ( Generic (config CPartial)
+     , Generic (LensConfig CPartial config)
+     , GLensFor CPartial (config CPartial) (Rep (config CPartial)) (Rep (LensConfig CPartial config))
+     )
+  => LensConfig CPartial config
+configLensPartial = configLens' (Nothing :: Maybe CPartial)
 
-instance GLensFor root r rl => GLensFor root (D1 m r) (D1 m rl) where
-  gToLensFor rootLens = M1 $ gToLensFor (rootLens . G._M1)
+configLens ::
+     forall config proxy.
+     ( Generic (config CComplete)
+     , Generic (LensConfig CComplete config)
+     , GLensFor CComplete (config CComplete) (Rep (config CComplete)) (Rep (LensConfig CComplete config))
+     )
+  => LensConfig CComplete config
+configLens = configLens' (Nothing :: Maybe CComplete)
 
-instance GLensFor root r rl => GLensFor root (C1 m r) (C1 m rl) where
-  gToLensFor rootLens = M1 $ gToLensFor (rootLens . G._M1)
+class GLensFor k root rep repLens where
+  gToLensFor :: proxy k -> Lens' root (rep x) -> repLens x
 
-instance (GLensFor root ra ral, GLensFor root rb rbl) => GLensFor root (ra :*: rb) (ral :*: rbl) where
-  gToLensFor rootLens = gToLensFor (rootLens . _1) :*: gToLensFor (rootLens . _2)
+instance GLensFor k root r rl => GLensFor k root (D1 m r) (D1 m rl) where
+  gToLensFor pk rootLens = M1 $ gToLensFor pk (rootLens . G._M1)
 
-instance GLensFor root r rl => GLensFor root (S1 m r) (S1 m rl) where
-  gToLensFor rootLens = M1 $ gToLensFor (rootLens . G._M1)
+instance GLensFor k root r rl => GLensFor k root (C1 m r) (C1 m rl) where
+  gToLensFor pk rootLens = M1 $ gToLensFor pk (rootLens . G._M1)
 
-instance GLensFor root (Rec0 (Last x)) (Rec0 (LensFor root (Maybe x))) where
-  gToLensFor rootLens = K1 $ LensFor $ rootLens . G._K1 . iso getLast Last
+instance (GLensFor k root ra ral, GLensFor k root rb rbl) =>
+         GLensFor k root (ra :*: rb) (ral :*: rbl) where
+  gToLensFor pk rootLens =
+    gToLensFor pk (rootLens . _1) :*: gToLensFor pk (rootLens . _2)
 
-instance GLensFor root (Rec0 (Set x)) (Rec0 (LensFor root (Set x))) where
-  gToLensFor rootLens = K1 $ LensFor $ rootLens . G._K1
+instance GLensFor k root r rl => GLensFor k root (S1 m r) (S1 m rl) where
+  gToLensFor pk rootLens = M1 $ gToLensFor pk (rootLens . G._M1)
 
-instance GLensFor root (Rec0 Any) (Rec0 (LensFor root Bool)) where
-  gToLensFor rootLens = K1 $ LensFor $ rootLens . G._K1 . iso getAny Any
+instance GLensLeaf k x y =>
+         GLensFor k root (Rec0 x) (Rec0 (LensFor root y)) where
+  gToLensFor pk rootLens = K1 $ LensFor $ rootLens . G._K1 . gLensLeaf pk
+
+class GLensLeaf k x y where
+  gLensLeaf :: proxy k -> Lens' x y
+
+instance GLensLeaf CPartial (Last a) (Maybe a) where
+  gLensLeaf _ = iso getLast Last
+
+instance GLensLeaf CPartial Any Bool where
+  gLensLeaf _ = iso getAny Any
+
+instance GLensLeaf CPartial (Set a) (Set a) where
+  gLensLeaf _ = id
+
+instance GLensLeaf CComplete a a where
+  gLensLeaf _ = id

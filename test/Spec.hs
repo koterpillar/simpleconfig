@@ -9,8 +9,14 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 
 import Control.Lens
+import Control.Monad
 
-import Data.Text
+import Data.Set (Set)
+import qualified Data.Set as Set
+import Data.Text (Text)
+import qualified Data.Text as Text
+import qualified Data.Text.IO as Text
+import Data.Foldable
 
 import Generics.Deriving.Monoid
 
@@ -34,11 +40,25 @@ instance Monoid PartialConfig where
   mempty = memptydefault
   mappend = mappenddefault
 
+Config (LensFor address') (LensFor dryRun') (LensFor widgets') =
+  configLensPartial
+
 type Config = Complete ConfigF
+
+deriving instance Eq Config
+
+deriving instance Show Config
 
 Config (LensFor address) (LensFor dryRun) (LensFor widgets) = configLens
 
 main :: IO ()
 main = do
-  let partial = mempty & address <>~ pure "Silverpond"
-  pure ()
+  let config' =
+        mempty & address' <>~ pure "Silverpond" & dryRun' .~ True & widgets' <>~
+        Set.singleton "blah"
+  print config'
+  let (Just config) = fromPartialConfig config'
+  Text.putStrLn $ "Address = " <> config ^. address
+  when (config ^. dryRun) $ Text.putStrLn "Dry run"
+  for_ (config ^. widgets) $ \widget ->
+    Text.putStrLn $ "Widget = " <> widget
