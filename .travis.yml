@@ -137,7 +137,7 @@ script:
 
 deploy:
   provider: script
-  script: deploy.sh
+  script: ./deploy.sh
   on:
     tags: true
     all_branches: true
