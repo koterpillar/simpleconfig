@@ -139,6 +139,7 @@ deploy:
   provider: script
   script:
     - |
+      set -ex
       mkdir -p ~/.stack/upload
       echo "{\"username\":\"${HACKAGE_USERNAME}\",\"password\":\"${HACKAGE_PASSWD}\"}" > ~/.stack/upload/credentials.json
       stack upload . --no-signature
