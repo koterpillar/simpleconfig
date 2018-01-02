@@ -134,3 +134,18 @@ script:
       ;;
   esac
   set +ex
+
+deploy:
+  provider: script
+  script:
+    - |
+      mkdir -p ~/.stack/upload
+      echo "{\"username\":\"${HACKAGE_USERNAME}\",\"password\":\"${HACKAGE_PASSWD}\"}" > ~/.stack/upload/credentials.json
+      stack upload . --no-signature
+  on:
+    tags: true
+    all_branches: true
+    condition:
+      - '$BUILD = stack'
+      - '$ARGS = ""'
+      - "echo $TRAVIS_TAG | grep -qE '^v\\d\\.\\d\\.\\d$'"
