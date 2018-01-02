@@ -1,5 +1,11 @@
+{-|
+Module: Config.Simple
+Description: Simple configuration data types
+
+Functions for declaring a configuration data type.
+-}
+
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE ExplicitForAll #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
