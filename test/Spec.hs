@@ -55,7 +55,7 @@ Config (LensFor address) (LensFor dryRun) (LensFor widgets) = configLens
 main :: IO ()
 main = do
   let config' =
-        mempty & (address' <>~ Last (Just "Silverpond")) & (dryRun' .~ True) &
+        mempty & (address' <>~ Last (Just "Silverpond")) & (dryRun' <>~ Any True) &
         (widgets' <>~ Set.singleton "blah") &
         (address' <>~ Last (Just "SEEK"))
   print config'
