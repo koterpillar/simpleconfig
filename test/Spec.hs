@@ -11,12 +11,13 @@
 import Control.Lens
 import Control.Monad
 
+import Data.Foldable
+import Data.Monoid (Last(..))
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
-import Data.Foldable
 
 import Generics.Deriving.Monoid
 
@@ -54,11 +55,11 @@ Config (LensFor address) (LensFor dryRun) (LensFor widgets) = configLens
 main :: IO ()
 main = do
   let config' =
-        mempty & address' <>~ pure "Silverpond" & dryRun' .~ True & widgets' <>~
-        Set.singleton "blah"
+        mempty & (address' <>~ Last (Just "Silverpond")) & (dryRun' .~ True) &
+        (widgets' <>~ Set.singleton "blah") &
+        (address' <>~ Last (Just "SEEK"))
   print config'
   let (Just config) = fromPartialConfig config'
   Text.putStrLn $ "Address = " <> config ^. address
   when (config ^. dryRun) $ Text.putStrLn "Dry run"
-  for_ (config ^. widgets) $ \widget ->
-    Text.putStrLn $ "Widget = " <> widget
+  for_ (config ^. widgets) $ \widget -> Text.putStrLn $ "Widget = " <> widget

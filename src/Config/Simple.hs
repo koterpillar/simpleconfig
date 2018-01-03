@@ -49,7 +49,7 @@ newtype LensFor s a =
 type family ConfigLast a k where
   ConfigLast a CPartial = Last a
   ConfigLast a CComplete = a
-  ConfigLast a (CLensFor CPartial root) = LensFor root (Maybe a)
+  ConfigLast a (CLensFor CPartial root) = LensFor root (Last a)
   ConfigLast a (CLensFor CComplete root) = LensFor root a
 
 type family ConfigBool k where
@@ -158,8 +158,8 @@ instance GLensForMember k x y =>
 class GLensForMember k x y where
   gLensLeaf :: proxy k -> Lens' x y
 
-instance GLensForMember CPartial (Last a) (Maybe a) where
-  gLensLeaf _ = iso getLast Last
+instance GLensForMember CPartial (Last a) (Last a) where
+  gLensLeaf _ = id
 
 instance GLensForMember CPartial Any Bool where
   gLensLeaf _ = iso getAny Any
