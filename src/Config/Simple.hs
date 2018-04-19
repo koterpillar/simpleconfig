@@ -4,7 +4,6 @@ Description: Simple configuration data types
 
 Functions for declaring a configuration data type.
 -}
-
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -22,7 +21,6 @@ module Config.Simple
   , Complete
   , LensFor(..)
   , configLens
-  , configLensPartial
   , fromPartialConfig
   ) where
 
@@ -104,49 +102,30 @@ instance GFromPartialConfigMember (Set a) (Set a) where
 instance GFromPartialConfigMember (Last a) a where
   gFromPartialConfigMember = getLast
 
-configLens' ::
-     forall config k proxy.
+configLens ::
+     forall config k.
      ( Generic (config k)
      , Generic (LensConfig k config)
-     , GLensFor k (config k) (Rep (config k)) (Rep (LensConfig k config))
+     , GLensFor (config k) (Rep (config k)) (Rep (LensConfig k config))
      )
-  => proxy k
-  -> LensConfig k config
-configLens' pk = G.to $ gToLensFor pk rootLens
+  => LensConfig k config
+configLens = G.to $ gToLensFor rootLens
   where
     rootLens ::
          forall x. Generic (config k)
       => Lens' (config k) (Rep (config k) x)
     rootLens = G.generic
 
-configLensPartial ::
-     forall config proxy.
-     ( Generic (config CPartial)
-     , Generic (LensConfig CPartial config)
-     , GLensFor CPartial (config CPartial) (Rep (config CPartial)) (Rep (LensConfig CPartial config))
-     )
-  => LensConfig CPartial config
-configLensPartial = configLens' (Nothing :: Maybe CPartial)
+class GLensFor root rep repLens where
+  gToLensFor :: Lens' root (rep x) -> repLens x
 
-configLens ::
-     forall config proxy.
-     ( Generic (config CComplete)
-     , Generic (LensConfig CComplete config)
-     , GLensFor CComplete (config CComplete) (Rep (config CComplete)) (Rep (LensConfig CComplete config))
-     )
-  => LensConfig CComplete config
-configLens = configLens' (Nothing :: Maybe CComplete)
+instance GLensFor root r rl => GLensFor root (M1 i m r) (M1 i m rl) where
+  gToLensFor rootLens = M1 $ gToLensFor (rootLens . G._M1)
 
-class GLensFor k root rep repLens where
-  gToLensFor :: proxy k -> Lens' root (rep x) -> repLens x
+instance (GLensFor root ra ral, GLensFor root rb rbl) =>
+         GLensFor root (ra :*: rb) (ral :*: rbl) where
+  gToLensFor rootLens =
+    gToLensFor (rootLens . _1) :*: gToLensFor (rootLens . _2)
 
-instance GLensFor k root r rl => GLensFor k root (M1 i m r) (M1 i m rl) where
-  gToLensFor pk rootLens = M1 $ gToLensFor pk (rootLens . G._M1)
-
-instance (GLensFor k root ra ral, GLensFor k root rb rbl) =>
-         GLensFor k root (ra :*: rb) (ral :*: rbl) where
-  gToLensFor pk rootLens =
-    gToLensFor pk (rootLens . _1) :*: gToLensFor pk (rootLens . _2)
-
-instance GLensFor k root (Rec0 x) (Rec0 (LensFor root x)) where
-  gToLensFor pk rootLens = K1 $ LensFor $ rootLens . G._K1
+instance GLensFor root (Rec0 x) (Rec0 (LensFor root x)) where
+  gToLensFor rootLens = K1 $ LensFor $ rootLens . G._K1

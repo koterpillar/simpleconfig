@@ -41,9 +41,6 @@ instance Monoid PartialConfig where
   mempty = memptydefault
   mappend = mappenddefault
 
-Config (LensFor address') (LensFor dryRun') (LensFor widgets') =
-  configLensPartial
-
 type Config = Complete ConfigF
 
 deriving instance Eq Config
@@ -55,9 +52,9 @@ Config (LensFor address) (LensFor dryRun) (LensFor widgets) = configLens
 main :: IO ()
 main = do
   let config' =
-        mempty & (address' <>~ pure "Silverpond") & (dryRun' <>~ Any True) &
-        (widgets' <>~ Set.singleton "blah") &
-        (address' <>~ pure "SEEK")
+        mempty & (address <>~ pure "Silverpond") & (dryRun <>~ Any True) &
+        (widgets <>~ Set.singleton "blah") &
+        (address <>~ pure "SEEK")
   print config'
   let (Just config) = fromPartialConfig config'
   Text.putStrLn $ "Address = " <> config ^. address
