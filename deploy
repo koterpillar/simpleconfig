@@ -14,4 +14,10 @@ File.open(File.expand_path('~/.stack/upload/credentials.json'), 'w') { |f|
   f.write(config.to_json)
 }
 
-exec('stack', 'upload', '.', '--no-signature')
+hackage_uploaded = system('stack', 'upload', '.', '--no-signature')
+if not hackage_uploaded
+  print "Failed to upload to Hackage.\n"
+  # FIXME: Stack still tries to sign the package and fails
+  # https://github.com/commercialhaskell/stack/issues/3739
+  # exit(1)
+end
