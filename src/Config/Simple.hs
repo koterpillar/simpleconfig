@@ -26,8 +26,10 @@ module Config.Simple
 
 import Control.Lens
 
+import Data.Either.Validation
 import Data.Monoid (Any(..), Last(..))
 import Data.Set (Set)
+import Data.String (IsString(..))
 
 import GHC.Generics
 import qualified GHC.Generics as G
@@ -69,16 +71,21 @@ fromPartialConfig ::
      ( Generic (Partial config)
      , Generic (Complete config)
      , GFromPartialConfig (Rep (Partial config)) (Rep (Complete config))
+     , IsString text
      )
   => Partial config
-  -> Maybe (Complete config)
+  -> Validation [text] (Complete config)
 fromPartialConfig = fmap G.to . gFromPartialConfig . G.from
 
 class GFromPartialConfig (repPartial :: * -> *) (repComplete :: * -> *) where
-  gFromPartialConfig :: repPartial x -> Maybe (repComplete x)
+  gFromPartialConfig :: IsString text => repPartial x -> Validation [text] (repComplete x)
 
 instance GFromPartialConfig fp fc =>
-         GFromPartialConfig (M1 i m fp) (M1 i m fc) where
+         GFromPartialConfig (D1 m fp) (D1 m fc) where
+  gFromPartialConfig (M1 x) = M1 <$> gFromPartialConfig x
+
+instance GFromPartialConfig fp fc =>
+         GFromPartialConfig (C1 m fp) (C1 m fc) where
   gFromPartialConfig (M1 x) = M1 <$> gFromPartialConfig x
 
 instance (GFromPartialConfig ap ac, GFromPartialConfig bp bc) =>
@@ -86,12 +93,23 @@ instance (GFromPartialConfig ap ac, GFromPartialConfig bp bc) =>
   gFromPartialConfig (a :*: b) =
     liftA2 (:*:) (gFromPartialConfig a) (gFromPartialConfig b)
 
+instance (GFromPartialConfigMaybe fp fc, Selector m) =>
+         GFromPartialConfig (S1 m fp) (S1 m fc) where
+  gFromPartialConfig v@(M1 x) =
+    fmap M1 $
+    case gFromPartialConfigMaybe x of
+      Just r -> Success r
+      Nothing -> Failure [fromString $ selName v]
+
+class GFromPartialConfigMaybe (repPartial :: * -> *) (repComplete :: * -> *) where
+  gFromPartialConfigMaybe :: repPartial x -> Maybe (repComplete x)
+
 class GFromPartialConfigMember partial complete where
   gFromPartialConfigMember :: partial -> Maybe complete
 
 instance GFromPartialConfigMember partial complete =>
-         GFromPartialConfig (Rec0 partial) (Rec0 complete) where
-  gFromPartialConfig (K1 a) = K1 <$> gFromPartialConfigMember a
+         GFromPartialConfigMaybe (Rec0 partial) (Rec0 complete) where
+  gFromPartialConfigMaybe (K1 a) = K1 <$> gFromPartialConfigMember a
 
 instance GFromPartialConfigMember Any Bool where
   gFromPartialConfigMember = Just . getAny

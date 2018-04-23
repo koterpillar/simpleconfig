@@ -12,6 +12,7 @@ import Control.Lens
 import Control.Monad
 
 import Data.Foldable
+import Data.Either.Validation
 import Data.Monoid (Last(..))
 import Data.Set (Set)
 import qualified Data.Set as Set
@@ -56,7 +57,10 @@ main = do
         (widgets <>~ Set.singleton "blah") &
         (address <>~ pure "SEEK")
   print config'
-  let (Just config) = fromPartialConfig config'
+  let (Success config) = fromPartialConfig config'
   Text.putStrLn $ "Address = " <> config ^. address
   when (config ^. dryRun) $ Text.putStrLn "Dry run"
   for_ (config ^. widgets) $ \widget -> Text.putStrLn $ "Widget = " <> widget
+  let incompleteConfig' = mempty & (dryRun <>~ Any True)
+  let (Failure fields) = fromPartialConfig incompleteConfig'
+  for_ fields Text.putStrLn

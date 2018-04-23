@@ -15,6 +15,7 @@ library:
   dependencies:
   - base >=4.7 && <5
   - containers
+  - either
   - lens
 tests:
   simpleconfig-test:
@@ -28,6 +29,7 @@ tests:
     - base
     - simpleconfig
     - containers
+    - either
     - generic-deriving
     - lens
     - text
