@@ -31,5 +31,6 @@ tests:
     - containers
     - either
     - generic-deriving
+    - hspec
     - lens
     - text

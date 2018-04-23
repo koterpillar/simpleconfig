@@ -13,6 +13,7 @@ import Control.Monad
 
 import Data.Foldable
 import Data.Either.Validation
+import Data.Maybe
 import Data.Monoid (Last(..))
 import Data.Set (Set)
 import qualified Data.Set as Set
@@ -22,7 +23,9 @@ import qualified Data.Text.IO as Text
 
 import Generics.Deriving.Monoid
 
-import GHC.Generics
+import GHC.Generics hiding (to)
+
+import Test.Hspec
 
 import Config.Simple
 
@@ -50,17 +53,30 @@ deriving instance Show Config
 
 Config (LensFor address) (LensFor dryRun) (LensFor widgets) = configLens
 
+isSuccess :: Validation e a -> Bool
+isSuccess (Success _) = True
+isSuccess (Failure _) = False
+
 main :: IO ()
-main = do
-  let config' =
-        mempty & (address <>~ pure "Silverpond") & (dryRun <>~ Any True) &
-        (widgets <>~ Set.singleton "blah") &
-        (address <>~ pure "SEEK")
-  print config'
-  let (Success config) = fromPartialConfig config'
-  Text.putStrLn $ "Address = " <> config ^. address
-  when (config ^. dryRun) $ Text.putStrLn "Dry run"
-  for_ (config ^. widgets) $ \widget -> Text.putStrLn $ "Widget = " <> widget
-  let incompleteConfig' = mempty & (dryRun <>~ Any True)
-  let (Failure fields) = fromPartialConfig incompleteConfig'
-  for_ fields Text.putStrLn
+main =
+  hspec $ describe "fromPartialConfig" $ do
+    context "with a complete config" $ do
+      let config' =
+            mempty & (address <>~ pure "Silverpond") & (dryRun <>~ Any True) &
+            (widgets <>~ Set.singleton "blah") &
+            (address <>~ pure "SEEK")
+      let result = fromPartialConfig config'
+      it "should succeed" $ result `shouldSatisfy` isSuccess
+      let (Success config) = fromPartialConfig config'
+      it "should override Last members with later assignments" $ config ^.
+        address `shouldBe`
+        "SEEK"
+      it "should turn on Any members" $ config ^. dryRun `shouldBe` True
+      it "should record set members" $ config ^. widgets . to Set.toList `shouldBe`
+        ["blah"]
+    context "with incomplete config" $ do
+      let config' = mempty & (dryRun <>~ Any True)
+      let result = fromPartialConfig config'
+      it "should return a failure" $ result `shouldNotSatisfy` isSuccess
+      let (Failure fields) = fromPartialConfig config'
+      it "should return missing fields" $ fields `shouldBe` ["_address"]
