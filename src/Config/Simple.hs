@@ -12,6 +12,7 @@ Functions for declaring a configuration data type.
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module Config.Simple
   ( ConfigBool
@@ -20,7 +21,9 @@ module Config.Simple
   , Partial
   , Complete
   , LensFor(..)
+  , AccumFor(..)
   , configLens
+  , configLensPartial
   , fromPartialConfig
   ) where
 
@@ -29,6 +32,7 @@ import Control.Lens
 import Data.Either.Validation
 import Data.Monoid (Any(..), Last(..))
 import Data.Set (Set)
+import qualified Data.Set as Set
 import Data.String (IsString(..))
 
 import GHC.Generics
@@ -41,25 +45,41 @@ data CPartial
 
 data CComplete
 
+data CAccum
+
 data CLensFor k c
+
+type family ConfigLensTarget k where
+  ConfigLensTarget CComplete = CComplete
+  ConfigLensTarget CPartial = CAccum
+
+type family ConfigLensFor k s a where
+  ConfigLensFor CComplete s a = LensFor s a
+  ConfigLensFor CPartial s a = AccumFor s a
 
 newtype LensFor s a =
   LensFor (Lens' s a)
 
+newtype AccumFor s a =
+  AccumFor (a -> s -> s)
+
 type family ConfigLast a k where
   ConfigLast a CPartial = Last a
   ConfigLast a CComplete = a
-  ConfigLast a (CLensFor k root) = LensFor root (ConfigLast a k)
+  ConfigLast a CAccum = a
+  ConfigLast a (CLensFor k root) = ConfigLensFor k root (ConfigLast a (ConfigLensTarget k))
 
 type family ConfigBool k where
   ConfigBool CPartial = Any
   ConfigBool CComplete = Bool
-  ConfigBool (CLensFor k root) = LensFor root (ConfigBool k)
+  ConfigBool CAccum = Bool
+  ConfigBool (CLensFor k root) = ConfigLensFor k root (ConfigBool (ConfigLensTarget k))
 
 type family ConfigSet a k where
   ConfigSet a CPartial = Set a
   ConfigSet a CComplete = Set a
-  ConfigSet a (CLensFor k root) = LensFor root (ConfigSet a k)
+  ConfigSet a CAccum = a
+  ConfigSet a (CLensFor k root) = ConfigLensFor k root (ConfigSet a (ConfigLensTarget k))
 
 type Partial config = config CPartial
 
@@ -120,19 +140,37 @@ instance GFromPartialConfigMember (Set a) (Set a) where
 instance GFromPartialConfigMember (Last a) a where
   gFromPartialConfigMember = getLast
 
-configLens ::
+configLens' ::
      forall config k.
      ( Generic (config k)
      , Generic (LensConfig k config)
      , GLensFor (config k) (Rep (config k)) (Rep (LensConfig k config))
      )
   => LensConfig k config
-configLens = G.to $ gToLensFor rootLens
+configLens' = G.to $ gToLensFor rootLens
   where
     rootLens ::
          forall x. Generic (config k)
       => Lens' (config k) (Rep (config k) x)
     rootLens = G.generic
+
+configLens ::
+     forall config.
+     ( Generic (config CComplete)
+     , Generic (LensConfig CComplete config)
+     , GLensFor (config CComplete) (Rep (config CComplete)) (Rep (LensConfig CComplete config))
+     )
+  => LensConfig CComplete config
+configLens = configLens'
+
+configLensPartial ::
+     forall config.
+     ( Generic (config CPartial)
+     , Generic (LensConfig CPartial config)
+     , GLensFor (config CPartial) (Rep (config CPartial)) (Rep (LensConfig CPartial config))
+     )
+  => LensConfig CPartial config
+configLensPartial = configLens'
 
 class GLensFor root rep repLens where
   gToLensFor :: Lens' root (rep x) -> repLens x
@@ -147,3 +185,12 @@ instance (GLensFor root ra ral, GLensFor root rb rbl) =>
 
 instance GLensFor root (Rec0 x) (Rec0 (LensFor root x)) where
   gToLensFor rootLens = K1 $ LensFor $ rootLens . G._K1
+
+instance GLensFor root (Rec0 (Last x)) (Rec0 (AccumFor root x)) where
+  gToLensFor rootLens = K1 $ AccumFor $ \v s -> s & rootLens . G._K1 <>~ Last (Just v)
+
+instance GLensFor root (Rec0 Any) (Rec0 (AccumFor root Bool)) where
+  gToLensFor rootLens = K1 $ AccumFor $ \v s -> s & rootLens . G._K1 <>~ Any v
+
+instance Ord a => GLensFor root (Rec0 (Set a)) (Rec0 (AccumFor root a)) where
+  gToLensFor rootLens = K1 $ AccumFor $ \v s -> s & rootLens . G._K1 <>~ Set.singleton v

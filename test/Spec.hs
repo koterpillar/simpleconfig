@@ -11,8 +11,8 @@
 import Control.Lens
 import Control.Monad
 
-import Data.Foldable
 import Data.Either.Validation
+import Data.Foldable
 import Data.Maybe
 import Data.Monoid (Last(..))
 import Data.Set (Set)
@@ -23,7 +23,7 @@ import qualified Data.Text.IO as Text
 
 import Generics.Deriving.Monoid
 
-import GHC.Generics hiding (to)
+import GHC.Generics
 
 import Test.Hspec
 
@@ -53,29 +53,31 @@ deriving instance Show Config
 
 Config (LensFor address) (LensFor dryRun) (LensFor widgets) = configLens
 
+Config (AccumFor address') (AccumFor dryRun') (AccumFor widgets') =
+  configLensPartial
+
 isSuccess :: Validation e a -> Bool
 isSuccess (Success _) = True
 isSuccess (Failure _) = False
 
 main :: IO ()
 main =
-  hspec $ describe "fromPartialConfig" $ do
+  hspec $
+  describe "fromPartialConfig" $ do
     context "with a complete config" $ do
       let config' =
-            mempty & (address <>~ pure "Silverpond") & (dryRun <>~ Any True) &
-            (widgets <>~ Set.singleton "blah") &
-            (address <>~ pure "SEEK")
+            mempty & address' "Silverpond" & dryRun' True & widgets' "blah" &
+            address' "SEEK"
       let result = fromPartialConfig config'
       it "should succeed" $ result `shouldSatisfy` isSuccess
       let (Success config) = fromPartialConfig config'
-      it "should override Last members with later assignments" $ config ^.
-        address `shouldBe`
-        "SEEK"
+      it "should override Last members with later assignments" $
+        config ^. address `shouldBe` "SEEK"
       it "should turn on Any members" $ config ^. dryRun `shouldBe` True
-      it "should record set members" $ config ^. widgets . to Set.toList `shouldBe`
-        ["blah"]
+      it "should record set members" $
+        config ^. widgets `shouldBe` Set.fromList ["blah"]
     context "with incomplete config" $ do
-      let config' = mempty & (dryRun <>~ Any True)
+      let config' = mempty & dryRun' True
       let result = fromPartialConfig config'
       it "should return a failure" $ result `shouldNotSatisfy` isSuccess
       let (Failure fields) = fromPartialConfig config'
